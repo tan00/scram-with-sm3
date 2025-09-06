@@ -1,8 +1,14 @@
 //! # Salted Challenge Response Authentication Mechanism (SCRAM)
 //!
-//! This implementation currently provides a client and a server for the SCRAM-SHA-256 mechanism
+//! This implementation provides a client and a server for SCRAM-SHA-256 and SCRAM-SM3 mechanisms
 //! according to [RFC5802](https://tools.ietf.org/html/rfc5802) and
 //! [RFC7677](https://tools.ietf.org/html/rfc7677). It doesn't support channel-binding.
+//!
+//! The library supports both SHA-256 and SM3 hash algorithms through feature flags:
+//! - `sha256`: Enables SCRAM-SHA-256 support (requires `ring` crate)
+//! - `sm3`: Enables SCRAM-SM3 support (requires `sm3` and `hmac` crates)
+//!
+//! Both features are enabled by default.
 //!
 //! # Usage
 //!
@@ -127,9 +133,6 @@
 //! // Check if the client successfully authenticated
 //! assert_eq!(status, AuthenticationStatus::Authenticated);
 //! ```
-extern crate base64;
-extern crate rand;
-extern crate ring;
 
 /// The length of the client nonce in characters/bytes.
 const NONCE_LENGTH: usize = 24;
@@ -141,6 +144,23 @@ mod error;
 pub mod server;
 
 pub use client::ScramClient;
+
+#[cfg(feature = "sha256")]
+pub use client::{ClientFinalSha256, ScramClientSha256, ServerFinalSha256};
+
+#[cfg(feature = "sm3")]
+pub use client::{ClientFinalSm3, ScramClientSm3, ServerFinalSm3};
 pub use error::{Error, Field, Kind};
 pub use server::{AuthenticationProvider, AuthenticationStatus, PasswordInfo, ScramServer};
-pub use utils::hash_password;
+
+// Export hash algorithm trait and implementations
+pub use utils::HashAlgorithm;
+
+#[cfg(feature = "sha256")]
+pub use utils::{Sha256, find_proofs_sha256, hash_password_sha256};
+
+#[cfg(feature = "sm3")]
+pub use utils::{Sm3Hash, find_proofs_sm3, hash_password_sm3};
+
+// Export generic functions
+pub use utils::{find_proofs, hash_password};

@@ -3,13 +3,21 @@ use std::num::NonZeroU32;
 
 use base64;
 use rand::distributions::{Distribution, Uniform};
-use rand::{rngs::OsRng, Rng};
-use ring::digest::SHA256_OUTPUT_LEN;
-use ring::hmac;
+use rand::{Rng, rngs::OsRng};
 
-use error::{Error, Field, Kind};
-use utils::{find_proofs, hash_password};
-use NONCE_LENGTH;
+use crate::NONCE_LENGTH;
+use crate::error::{Error, Field, Kind};
+use crate::utils::HashAlgorithm;
+
+#[cfg(feature = "sha256")]
+use crate::utils::{Sha256, find_proofs_sha256, hash_password_sha256};
+#[cfg(feature = "sha256")]
+use ring::digest::SHA256_OUTPUT_LEN;
+#[cfg(feature = "sha256")]
+use ring::hmac::Tag;
+
+#[cfg(feature = "sm3")]
+use crate::utils::{Sm3Hash, find_proofs_sm3, hash_password_sm3};
 
 #[deprecated(
     since = "0.2.0",
@@ -173,13 +181,14 @@ impl<'a> ServerFirst<'a> {
     ///
     /// * Error::Protocol
     /// * Error::UnsupportedExtension
+    #[cfg(feature = "sha256")]
     pub fn handle_server_first(self, server_first: &str) -> Result<ClientFinal, Error> {
         let (nonce, salt, iterations) = parse_server_first(server_first)?;
         if !nonce.starts_with(&self.client_nonce) {
             return Err(Error::Protocol(Kind::InvalidNonce));
         }
-        let salted_password = hash_password(self.password, iterations, &salt);
-        let (client_proof, server_signature): ([u8; SHA256_OUTPUT_LEN], hmac::Tag) = find_proofs(
+        let salted_password = hash_password_sha256(self.password, iterations, &salt);
+        let (client_proof, server_signature) = find_proofs_sha256(
             &self.gs2header,
             &self.client_first_bare,
             &server_first,
@@ -203,7 +212,7 @@ impl<'a> ServerFirst<'a> {
 /// processed.
 #[derive(Debug)]
 pub struct ClientFinal {
-    server_signature: hmac::Tag,
+    server_signature: Tag,
     client_final: String,
 }
 
@@ -224,7 +233,7 @@ impl ClientFinal {
 /// The final state of the SCRAM mechanism after the final client message was computed.
 #[derive(Debug)]
 pub struct ServerFinal {
-    server_signature: hmac::Tag,
+    server_signature: Tag,
 }
 
 impl ServerFinal {
@@ -241,6 +250,178 @@ impl ServerFinal {
     /// Detailed semantics are documented in the [`Error`] type.
     pub fn handle_server_final(self, server_final: &str) -> Result<(), Error> {
         if self.server_signature.as_ref() == &*parse_server_final(server_final)? {
+            Ok(())
+        } else {
+            Err(Error::InvalidServer)
+        }
+    }
+}
+
+// Specific implementations for different hash algorithms
+
+/// SCRAM-SHA-256 client implementation
+#[cfg(feature = "sha256")]
+pub type ScramClientSha256<'a> = ScramClient<'a>;
+
+/// SCRAM-SM3 client implementation  
+#[cfg(feature = "sm3")]
+pub type ScramClientSm3<'a> = ScramClient<'a>;
+
+// We need to implement the handle_server_first method for specific algorithms
+#[cfg(feature = "sha256")]
+impl<'a> ScramClient<'a> {
+    /// Handle server first message for SHA-256 algorithm
+    pub fn handle_server_first_sha256(
+        self,
+        server_first: &str,
+    ) -> Result<ClientFinalSha256, Error> {
+        let (nonce, salt, iterations) = parse_server_first(server_first)?;
+        if !nonce.starts_with(&self.nonce) {
+            return Err(Error::Protocol(Kind::InvalidNonce));
+        }
+
+        // Create client_first_bare like in the original client_first method
+        let escaped_authcid: Cow<str> = if self.authcid.chars().any(|chr| chr == ',' || chr == '=')
+        {
+            self.authcid.into()
+        } else {
+            self.authcid.replace(',', "=2C").replace('=', "=3D").into()
+        };
+        let client_first_bare = format!("n={},r={}", escaped_authcid, self.nonce);
+
+        let salted_password = hash_password_sha256(self.password, iterations, &salt);
+        let (client_proof, server_signature) = find_proofs_sha256(
+            &self.gs2header,
+            &client_first_bare,
+            &server_first,
+            &salted_password,
+            nonce,
+        );
+        let client_final = format!(
+            "c={},r={},p={}",
+            base64::encode(self.gs2header.as_bytes()),
+            nonce,
+            base64::encode(&client_proof)
+        );
+        Ok(ClientFinalSha256 {
+            client_final,
+            server_signature,
+        })
+    }
+}
+
+#[cfg(feature = "sm3")]
+impl<'a> ScramClient<'a> {
+    /// Handle server first message for SM3 algorithm
+    pub fn handle_server_first_sm3(self, server_first: &str) -> Result<ClientFinalSm3, Error> {
+        let (nonce, salt, iterations) = parse_server_first(server_first)?;
+        if !nonce.starts_with(&self.nonce) {
+            return Err(Error::Protocol(Kind::InvalidNonce));
+        }
+
+        // Create client_first_bare like in the original client_first method
+        let escaped_authcid: Cow<str> = if self.authcid.chars().any(|chr| chr == ',' || chr == '=')
+        {
+            self.authcid.into()
+        } else {
+            self.authcid.replace(',', "=2C").replace('=', "=3D").into()
+        };
+        let client_first_bare = format!("n={},r={}", escaped_authcid, self.nonce);
+
+        let salted_password = hash_password_sm3(self.password, iterations, &salt);
+        let (client_proof, server_signature) = find_proofs_sm3(
+            &self.gs2header,
+            &client_first_bare,
+            &server_first,
+            &salted_password,
+            nonce,
+        );
+        let client_final = format!(
+            "c={},r={},p={}",
+            base64::encode(self.gs2header.as_bytes()),
+            nonce,
+            base64::encode(&client_proof)
+        );
+        Ok(ClientFinalSm3 {
+            client_final,
+            server_signature,
+        })
+    }
+}
+
+/// Client final state for SHA-256
+#[cfg(feature = "sha256")]
+#[derive(Debug)]
+pub struct ClientFinalSha256 {
+    client_final: String,
+    server_signature: Tag,
+}
+
+#[cfg(feature = "sha256")]
+impl ClientFinalSha256 {
+    /// Compute client final message for SHA-256
+    pub fn client_final(self) -> (ServerFinalSha256, String) {
+        (
+            ServerFinalSha256 {
+                server_signature: self.server_signature,
+            },
+            self.client_final,
+        )
+    }
+}
+
+/// Server final state for SHA-256
+#[cfg(feature = "sha256")]
+#[derive(Debug)]
+pub struct ServerFinalSha256 {
+    server_signature: Tag,
+}
+
+#[cfg(feature = "sha256")]
+impl ServerFinalSha256 {
+    /// Handle server final message for SHA-256
+    pub fn handle_server_final(self, server_final: &str) -> Result<(), Error> {
+        if self.server_signature.as_ref() == &*parse_server_final(server_final)? {
+            Ok(())
+        } else {
+            Err(Error::InvalidServer)
+        }
+    }
+}
+
+/// Client final state for SM3
+#[cfg(feature = "sm3")]
+#[derive(Debug)]
+pub struct ClientFinalSm3 {
+    client_final: String,
+    server_signature: Vec<u8>,
+}
+
+#[cfg(feature = "sm3")]
+impl ClientFinalSm3 {
+    /// Compute client final message for SM3
+    pub fn client_final(self) -> (ServerFinalSm3, String) {
+        (
+            ServerFinalSm3 {
+                server_signature: self.server_signature,
+            },
+            self.client_final,
+        )
+    }
+}
+
+/// Server final state for SM3
+#[cfg(feature = "sm3")]
+#[derive(Debug)]
+pub struct ServerFinalSm3 {
+    server_signature: Vec<u8>,
+}
+
+#[cfg(feature = "sm3")]
+impl ServerFinalSm3 {
+    /// Handle server final message for SM3
+    pub fn handle_server_final(self, server_final: &str) -> Result<(), Error> {
+        if self.server_signature.as_slice() == &*parse_server_final(server_final)? {
             Ok(())
         } else {
             Err(Error::InvalidServer)

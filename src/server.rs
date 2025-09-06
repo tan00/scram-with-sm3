@@ -2,13 +2,16 @@ use std::borrow::Cow;
 
 use base64;
 use rand::distributions::{Distribution, Uniform};
-use rand::{rngs::OsRng, Rng};
+use rand::{Rng, rngs::OsRng};
+
+#[cfg(feature = "sha256")]
 use ring::digest::SHA256_OUTPUT_LEN;
+#[cfg(feature = "sha256")]
 use ring::hmac;
 
-use error::{Error, Field, Kind};
-use utils::find_proofs;
-use NONCE_LENGTH;
+use crate::NONCE_LENGTH;
+use crate::error::{Error, Field, Kind};
+use crate::utils::find_proofs_sha256;
 
 /// Responds to client authentication challenges. It's the entrypoint for the SCRAM server side
 /// implementation.
@@ -286,7 +289,7 @@ impl<'a, P: AuthenticationProvider> ClientFinal<'a, P> {
 
     /// Checks that the proof from the client matches our saved credentials
     fn verify_proof(&self, proof: &str) -> Result<Option<String>, Error> {
-        let (client_proof, server_signature): ([u8; SHA256_OUTPUT_LEN], hmac::Tag) = find_proofs(
+        let (client_proof, server_signature) = find_proofs_sha256(
             &self.gs2header,
             &self.client_first_bare,
             &self.server_first,

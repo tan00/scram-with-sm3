@@ -1,19 +1,31 @@
 [package]
-authors = ["Thomas Bahn <thomas@thomas-bahn.net>"]
-description = "A SCRAM provider library."
+authors = ["Thomas Bahn <thomas@thomas-bahn.net>", "Modified for SM3 support"]
+description = "A SCRAM provider library supporting both SHA-256 and SM3."
 documentation = "https://docs.rs/scram"
-keywords = [ "scram", "authentication"]
+keywords = [ "scram", "authentication", "sha256", "sm3"]
 license = "MIT"
-name = "scram"
+name = "scram-with-sm3"
 readme = "README.md"
 repository = "https://github.com/tomprogrammer/scram"
 version = "0.6.0"
+
 
 [dependencies]
 base64 = "0.13.0"
 rand = "0.8.0"
 ring = "0.16.9"
+sm3 = { version = "0.4", optional = true }
+hmac = { version = "0.12", optional = true }
+hex = "0.4"
+
+[features]
+default = ["sha256", "sm3"]
+sha256 = ["ring"]
+sm3 = ["dep:sm3", "dep:hmac"]
+
+[[example]]
+name = "test_algorithms"
+path = "examples/test_algorithms.rs"
 
 [badges]
 maintenance = { status = "actively-developed" }
-travis-ci = { repository = "https://github.com/tomprogrammer/scram", branch = "master" }
