@@ -32,7 +32,7 @@
 //! but processing server messages can result in failure.
 //!
 //! ``` rust,no_run
-//! use scram::ScramClient;
+//! use scram_with_sm3::ScramClient;
 //!
 //! // This function represents your I/O implementation.
 //! # #[allow(unused_variables)]
@@ -85,7 +85,7 @@
 //! if authentication was successful or not.
 //!
 //! ```rust,no_run
-//! use scram::{ScramServer, AuthenticationStatus, AuthenticationProvider, PasswordInfo};
+//! use scram_with_sm3::{ScramServer, AuthenticationStatus, AuthenticationProvider, PasswordInfo};
 //!
 //! // Create a dummy authentication provider
 //! struct ExampleProvider;

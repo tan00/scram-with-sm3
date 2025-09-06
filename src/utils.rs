@@ -1,5 +1,6 @@
 use base64;
 use std::num::NonZeroU32;
+use crate::error::{Error, Field, Kind};
 
 #[cfg(feature = "sha256")]
 use ring::digest::{self, SHA256_OUTPUT_LEN, digest as ring_digest};

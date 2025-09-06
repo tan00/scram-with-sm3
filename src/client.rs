@@ -7,7 +7,6 @@ use rand::{Rng, rngs::OsRng};
 
 use crate::NONCE_LENGTH;
 use crate::error::{Error, Field, Kind};
-use crate::utils::HashAlgorithm;
 
 #[cfg(feature = "sha256")]
 use crate::utils::{Sha256, find_proofs_sha256, hash_password_sha256};

@@ -1,7 +1,7 @@
 #[cfg(feature = "sm3")]
 #[cfg(test)]
 mod tests {
-    use scram_multi::{ScramClient, find_proofs_sm3, hash_password_sm3};
+    use scram_with_sm3::{ScramClient, hash_password_sm3};
     use std::num::NonZeroU32;
 
     // 简单的hex解码函数
@@ -78,26 +78,17 @@ mod tests {
 
         println!("Expected salted password:   {}", expected_salted_password);
 
-        // 注意: 这里可能不完全匹配，因为我们的实现可能与标准有细微差异
-        // 但应该接近或可以通过调试找出差异
-        if salted_password.as_slice() != expected_bytes.as_slice() {
-            println!("⚠️  SaltedPassword不匹配，但这是预期的，需要调试PBKDF2-SM3实现");
-            println!(
-                "实际长度: {}, 期望长度: {}",
-                salted_password.len(),
-                expected_bytes.len()
-            );
-        } else {
-            println!("✅ SaltedPassword完全匹配！");
-        }
+        assert!(salted_password.as_slice() == expected_bytes.as_slice());
+
+    
     }
 
     #[test]
     fn test_sm3_algorithm_basic() {
         println!("Testing SM3 hash algorithm directly...");
 
-        use scram_multi::HashAlgorithm;
-        use scram_multi::Sm3Hash;
+        use scram_with_sm3::HashAlgorithm;
+        use scram_with_sm3::Sm3Hash;
 
         // 测试基本的SM3哈希
         let test_data = b"hello world";

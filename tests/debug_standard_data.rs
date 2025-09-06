@@ -1,6 +1,6 @@
-use base64::{engine::general_purpose, Engine as _};
+use base64;
 use hex;
-use scram_multi::{find_proofs_sm3, hash_password_sm3, HashAlgorithm, Sm3Hash};
+use scram_with_sm3::{find_proofs_sm3, hash_password_sm3, HashAlgorithm, Sm3Hash};
 use std::num::NonZeroU32;
 
 #[test]
@@ -32,7 +32,7 @@ fn debug_scram_sm3_step_by_step() {
     println!("  iterations: {}", iterations);
 
     // 步骤1: 解码盐值
-    let salt_bytes = general_purpose::STANDARD.decode(salt_b64).unwrap();
+    let salt_bytes = base64::decode(salt_b64).unwrap();
     println!("\n🔍 步骤1: 盐值解码");
     println!("  salt_b64: {}", salt_b64);
     println!("  salt_hex: {}", hex::encode(&salt_bytes).to_uppercase());
@@ -79,7 +79,7 @@ fn debug_scram_sm3_step_by_step() {
     let server_first = format!("r={},s={},i={}", combined_nonce, salt_b64, iterations);
     let client_final_without_proof = format!(
         "c={},r={}",
-        general_purpose::STANDARD.encode(gs2header.as_bytes()),
+        base64::encode(gs2header.as_bytes()),
         combined_nonce
     );
     let auth_message = format!(
@@ -122,12 +122,12 @@ fn debug_scram_sm3_step_by_step() {
     println!("  client_proof (XOR): {}", hex::encode(&client_proof));
     println!(
         "  client_proof_b64: {}",
-        general_purpose::STANDARD.encode(&client_proof)
+        base64::encode(&client_proof)
     );
     println!("  期望的client_proof_b64: {}", expected_client_proof_b64);
     println!(
         "  匹配: {}",
-        general_purpose::STANDARD.encode(&client_proof) == expected_client_proof_b64
+        base64::encode(&client_proof) == expected_client_proof_b64
     );
 
     // 使用我们的库函数验证
@@ -145,7 +145,7 @@ fn debug_scram_sm3_step_by_step() {
     );
     println!(
         "  库函数client_proof_b64: {}",
-        general_purpose::STANDARD.encode(&lib_client_proof)
+        base64::encode(&lib_client_proof)
     );
 
     // 检查是否有差异
